@@ -1,14 +1,16 @@
-use crate::args::Args;
+use crate::args::{Args, Commands, ConfigureCommands, IcsCommands};
 use chrono::{DateTime, Datelike, Timelike};
 use clap::Parser;
 use color_eyre::eyre::{Error, Result};
 use ical::IcalParser;
-use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Cursor};
+use reqwest::Client;
 use tabled::{Panel, Style, Table, Tabled};
 use tracing::warn;
+use crate::config::Config;
 
 mod args;
+mod config;
 
 #[derive(Tabled)]
 struct EventSummary {
@@ -28,20 +30,77 @@ struct EventSummary {
     duration_sec: i64,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     color_eyre::install()?;
 
     let args = Args::parse();
 
-    if !args.ics.exists() {
-        return Err(Error::msg("The ics file does not exist"));
+    let mut config = Config::open().await?.unwrap_or_default();
+
+    match args.commands {
+        Commands::Configure { configure_commands } => match configure_commands {
+            ConfigureCommands::Ics { ics_commands } => match ics_commands {
+                IcsCommands::List => ics_list(&mut config).await?,
+                IcsCommands::Add { link } => ics_add(&mut config, link).await?,
+                IcsCommands::Remove { index } => ics_remove(&mut config, index).await?,
+            }
+        },
+        Commands::Report { ics_index, month, year } => report(&mut config, ics_index, month, year).await?
+    };
+
+    Ok(())
+}
+
+async fn ics_list(config: &mut Config) -> Result<()> {
+    #[derive(Tabled)]
+    struct IcsList<'a> {
+        #[tabled(rename = "Index")]
+        index: usize,
+        #[tabled(rename = "URL")]
+        url: &'a str,
     }
 
-    let buf = BufReader::new(File::open(&args.ics)?);
-    let reader = IcalParser::new(buf);
+    let ics = config.ical.iter()
+        .enumerate()
+        .map(|(index, url)| IcsList {
+            index,
+            url
+        })
+        .collect::<Vec<_>>();
+
+    let table = Table::new(ics.iter())
+        .with(Style::rounded())
+        .to_string();
+    println!("{table}");
+    Ok(())
+}
+
+async fn ics_add(config: &mut Config, link: String) -> Result<()> {
+    if config.ical.contains(&link) {
+        return Err(Error::msg("Already exists"));
+    }
+
+    config.ical.push(link);
+    config.store().await
+}
+
+async fn ics_remove(config: &mut Config, index: usize) -> Result<()> {
+    if index >= config.ical.len() {
+        return Err(Error::msg("Invalid index"));
+    }
+
+    config.ical.remove(index);
+    config.store().await
+}
+
+async fn report(config: &mut Config, ics_index: usize, month: Option<u32>, year: Option<i32>) -> Result<()> {
+    let ics_url = config.ical.get(ics_index)
+        .ok_or(Error::msg("Invalid index"))?;
+    let parser = download_ical(ics_url).await?;
 
     // An ics file can contain multiple calendars, we just sum them up
-    let events = reader
+    let events = parser
         .into_iter()
         .map(|ical| {
             let ical = ical?;
@@ -126,31 +185,20 @@ fn main() -> Result<()> {
         .flatten()
         .collect::<Vec<_>>();
 
-    // Apply the month filter, if provided
-    let events = if let Some(month) = args.month {
-        events
-            .into_iter()
-            .filter(|x| x.month_start == month)
-            .collect::<Vec<_>>()
-    } else {
-        events
-    };
-
-    // Apply the year filter, if provided
-    let mut events = if let Some(year) = args.year {
-        events
-            .into_iter()
-            .filter(|x| x.year_start == year)
-            .collect::<Vec<_>>()
-    } else {
-        events
-    };
+    let mut events = events
+        .into_iter()
+        .filter(|event| month.map(|month| event.month_start == month).unwrap_or(true))
+        .filter(|event| year.map(|year| event.year_start == year).unwrap_or(true))
+        .collect::<Vec<_>>();
 
     // Sort by date
     events.sort_by(|a, b| a.date_start.cmp(&b.date_start));
 
     // Calculate the summed duration of all events
-    let total_duration: i64 = events.iter().map(|x| x.duration_sec).sum();
+    let total_duration: i64 = events
+        .iter()
+        .map(|x| x.duration_sec)
+        .sum();
 
     // Pretty-print as a table
     // Adding an empty row and a footer at the bottom
@@ -163,9 +211,22 @@ fn main() -> Result<()> {
             fmt_duration(total_duration)
         )))
         .to_string();
-    println!("{table}");
 
+    println!("{table}");
     Ok(())
+}
+
+async fn download_ical(url: &str) -> Result<IcalParser<BufReader<Cursor<Vec<u8>>>>> {
+    let body_bytes = Client::new()
+        .get(url)
+        .send()
+        .await?
+        .error_for_status()?
+        .bytes()
+        .await?
+        .to_vec();
+
+    Ok(IcalParser::new(BufReader::new(Cursor::new(body_bytes))))
 }
 
 /// Format a duration in seconds as HH:MM:SS

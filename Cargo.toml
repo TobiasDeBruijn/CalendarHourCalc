@@ -8,11 +8,13 @@ strip = true
 
 [dependencies]
 color-eyre = "0.6.2"
-ical = "0.7.0"
+ical = "0.8.0"
 tracing = "0.1.37"
 chrono = "0.4.23"
 tabled = "0.10.0"
-
-[dependencies.clap]
-version = "4.0.32"
-features = ["derive"]
+serde_json = "1.0.95"
+serde = { version = "1.0.159", features = ["derive"]}
+cfg-if = "1.0.0"
+clap = { version = "4.0.32", features = ["derive"]}
+tokio = { version = "1.27.0", features = ["full"]}
+reqwest = { version = "0.11.16", default-features = false, features = ["rustls-tls"]}
