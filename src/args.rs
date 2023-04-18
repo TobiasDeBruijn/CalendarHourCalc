@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -22,6 +22,9 @@ pub enum Commands {
         /// The year to filter on
         #[clap(long, short)]
         year: Option<i32>,
+
+        #[clap(long, short, value_enum)]
+        output_format: OutFormat
     }
 }
 
@@ -30,16 +33,25 @@ pub enum ConfigureCommands {
     Ics {
         #[command(subcommand)]
         ics_commands: IcsCommands,
-    }
+    },
+    Clear,
 }
 
 #[derive(Debug, Subcommand)]
 pub enum IcsCommands {
     List,
     Add {
+        name: String,
         link: String,
     },
     Remove {
         index: usize,
     },
+}
+
+#[derive(Debug, Clone, Default, ValueEnum)]
+pub enum OutFormat {
+    #[default]
+    Table,
+    Pdf,
 }

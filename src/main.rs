@@ -1,4 +1,4 @@
-use crate::args::{Args, Commands, ConfigureCommands, IcsCommands};
+use crate::args::{Args, Commands, ConfigureCommands, IcsCommands, OutFormat};
 use chrono::{DateTime, Datelike, Timelike};
 use clap::Parser;
 use color_eyre::eyre::{Error, Result};
@@ -7,13 +7,14 @@ use std::io::{BufReader, Cursor};
 use reqwest::Client;
 use tabled::{Panel, Style, Table, Tabled};
 use tracing::warn;
-use crate::config::Config;
+use crate::config::{Config, ICalConfig};
 
 mod args;
 mod config;
+mod pdf;
 
 #[derive(Tabled)]
-struct EventSummary {
+pub struct EventSummary {
     #[tabled(rename = "Date")]
     date: String,
     #[tabled(rename = "Time")]
@@ -36,20 +37,29 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let mut config = Config::open().await?.unwrap_or_default();
-
     match args.commands {
         Commands::Configure { configure_commands } => match configure_commands {
-            ConfigureCommands::Ics { ics_commands } => match ics_commands {
-                IcsCommands::List => ics_list(&mut config).await?,
-                IcsCommands::Add { link } => ics_add(&mut config, link).await?,
-                IcsCommands::Remove { index } => ics_remove(&mut config, index).await?,
-            }
+            ConfigureCommands::Ics { ics_commands } => {
+                let mut config = Config::open().await?.unwrap_or_default();
+                match ics_commands {
+                    IcsCommands::List => ics_list(&mut config).await?,
+                    IcsCommands::Add { name, link } => ics_add(&mut config, name, link).await?,
+                    IcsCommands::Remove { index } => ics_remove(&mut config, index).await?,
+                }
+            },
+            ConfigureCommands::Clear => config_clear().await?,
         },
-        Commands::Report { ics_index, month, year } => report(&mut config, ics_index, month, year).await?
+        Commands::Report { ics_index, month, year, output_format } => {
+            let mut config = Config::open().await?.unwrap_or_default();
+            report(&mut config, ics_index, month, year, output_format).await?
+        }
     };
 
     Ok(())
+}
+
+async fn config_clear() -> Result<()> {
+    Config::clear().await
 }
 
 async fn ics_list(config: &mut Config) -> Result<()> {
@@ -57,15 +67,18 @@ async fn ics_list(config: &mut Config) -> Result<()> {
     struct IcsList<'a> {
         #[tabled(rename = "Index")]
         index: usize,
+        #[tabled(rename = "Name")]
+        name: &'a str,
         #[tabled(rename = "URL")]
         url: &'a str,
     }
 
     let ics = config.ical.iter()
         .enumerate()
-        .map(|(index, url)| IcsList {
+        .map(|(index, ical_config)| IcsList {
             index,
-            url
+            name: &ical_config.name,
+            url: &ical_config.url,
         })
         .collect::<Vec<_>>();
 
@@ -76,12 +89,16 @@ async fn ics_list(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-async fn ics_add(config: &mut Config, link: String) -> Result<()> {
-    if config.ical.contains(&link) {
+async fn ics_add(config: &mut Config, name: String, link: String) -> Result<()> {
+    if config.ical.iter().find(|x| x.name.eq(&name)).is_some() {
         return Err(Error::msg("Already exists"));
     }
 
-    config.ical.push(link);
+    config.ical.push(ICalConfig {
+        url: link,
+        name,
+    });
+
     config.store().await
 }
 
@@ -94,10 +111,10 @@ async fn ics_remove(config: &mut Config, index: usize) -> Result<()> {
     config.store().await
 }
 
-async fn report(config: &mut Config, ics_index: usize, month: Option<u32>, year: Option<i32>) -> Result<()> {
-    let ics_url = config.ical.get(ics_index)
+async fn report(config: &mut Config, ics_index: usize, month: Option<u32>, year: Option<i32>, out_format: OutFormat) -> Result<()> {
+    let ics_config = config.ical.get(ics_index)
         .ok_or(Error::msg("Invalid index"))?;
-    let parser = download_ical(ics_url).await?;
+    let parser = download_ical(&ics_config.url).await?;
 
     // An ics file can contain multiple calendars, we just sum them up
     let events = parser
@@ -134,7 +151,6 @@ async fn report(config: &mut Config, ics_index: usize, month: Option<u32>, year:
                     // Convert both to DateTime
                     let start = hypentate_dttime(&dtstart);
                     let start = DateTime::parse_from_rfc3339(&start)?;
-
                     let end = hypentate_dttime(&dtend);
                     let end = DateTime::parse_from_rfc3339(&end)?;
 
@@ -194,12 +210,23 @@ async fn report(config: &mut Config, ics_index: usize, month: Option<u32>, year:
     // Sort by date
     events.sort_by(|a, b| a.date_start.cmp(&b.date_start));
 
-    // Calculate the summed duration of all events
-    let total_duration: i64 = events
+    match out_format {
+        OutFormat::Table => report_print_table(&events),
+        OutFormat::Pdf => pdf::generate_pdf(&ics_config.name, &events).await?,
+    }
+
+    Ok(())
+}
+
+pub fn calc_total_duration(events: &[EventSummary]) -> i64 {
+    events
         .iter()
         .map(|x| x.duration_sec)
-        .sum();
+        .sum()
 
+}
+
+fn report_print_table(events: &[EventSummary]) {
     // Pretty-print as a table
     // Adding an empty row and a footer at the bottom
     // to display the total time
@@ -208,12 +235,11 @@ async fn report(config: &mut Config, ics_index: usize, month: Option<u32>, year:
         .with(Panel::horizontal(events.len() + 1).column(2))
         .with(Panel::horizontal(events.len() + 2).column(2).text(format!(
             "Total: {} (HH:MM:SS)",
-            fmt_duration(total_duration)
+            fmt_duration(calc_total_duration(events))
         )))
         .to_string();
 
     println!("{table}");
-    Ok(())
 }
 
 async fn download_ical(url: &str) -> Result<IcalParser<BufReader<Cursor<Vec<u8>>>>> {
@@ -230,7 +256,7 @@ async fn download_ical(url: &str) -> Result<IcalParser<BufReader<Cursor<Vec<u8>>
 }
 
 /// Format a duration in seconds as HH:MM:SS
-fn fmt_duration(secs: i64) -> String {
+pub fn fmt_duration(secs: i64) -> String {
     format!(
         "{:02}:{:02}:{:02}",
         (secs / 60) / 60,

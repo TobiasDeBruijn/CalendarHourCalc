@@ -7,8 +7,14 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::env::var;
 
 #[derive(Default, Debug, Serialize, Deserialize)]
+pub struct ICalConfig {
+    pub url: String,
+    pub name: String,
+}
+
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Config {
-    pub ical: Vec<String>,
+    pub ical: Vec<ICalConfig>,
 }
 
 impl Config {
@@ -41,6 +47,12 @@ impl Config {
         } else {
             compiler_error!("Unsupported platform");
         }
+    }
+
+    pub async fn clear() -> Result<()> {
+        let path = Self::get_path().await?;
+        fs::remove_file(&path).await?;
+        Ok(())
     }
 
     pub async fn open() -> Result<Option<Self>> {
