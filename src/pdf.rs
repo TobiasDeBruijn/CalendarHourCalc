@@ -1,15 +1,18 @@
-use std::env;
-use std::path::Path;
-use tokio::fs;
+use crate::{calc_total_duration, fmt_duration, EventSummary};
 use color_eyre::Result;
 use itext::itext::kernel::{PdfDocument, PdfWriter};
-use itext::itext::layout::{BlockElement, Border, Cell, Document, ElementPropertyContainer, HorizontalAlignment, Paragraph, Table, TextAlignment};
+use itext::itext::layout::{
+    BlockElement, Border, Cell, Document, ElementPropertyContainer, HorizontalAlignment, Paragraph,
+    Table, TextAlignment,
+};
 use itext::java::ByteArrayOutputStream;
-use jni::{InitArgsBuilder, JavaVM, JNIEnv, JNIVersion};
+use jni::{InitArgsBuilder, JNIEnv, JNIVersion, JavaVM};
+use std::env;
+use std::path::Path;
 use tempfile::TempDir;
+use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::task::block_in_place;
-use crate::{calc_total_duration, EventSummary, fmt_duration};
 
 /// Java VM with jarfile dependencies
 struct DependentJavaVM {
@@ -32,7 +35,12 @@ impl DependentJavaVM {
     pub async fn new() -> Result<Self> {
         let tempdir = TempDir::new()?;
         let classpath = vec![
-            Self::write_jar(tracing_slf4j::DEPENDENCIES, "tracing_slf4j.jar", tempdir.path()).await?,
+            Self::write_jar(
+                tracing_slf4j::DEPENDENCIES,
+                "tracing_slf4j.jar",
+                tempdir.path(),
+            )
+            .await?,
             Self::write_jar(itext::bundle::DEPENDENCIES, "itext.jar", tempdir.path()).await?,
         ];
 
@@ -46,7 +54,7 @@ impl DependentJavaVM {
 
         Ok(Self {
             javavm,
-            _tempdir: tempdir
+            _tempdir: tempdir,
         })
     }
 
@@ -74,7 +82,11 @@ pub async fn generate_pdf(name: &str, events: &[EventSummary]) -> Result<()> {
     Ok(())
 }
 
-fn generate_pdf_inner(jvm: DependentJavaVM, name: &str, events: &[EventSummary]) -> Result<Vec<u8>> {
+fn generate_pdf_inner(
+    jvm: DependentJavaVM,
+    name: &str,
+    events: &[EventSummary],
+) -> Result<Vec<u8>> {
     let mut env = jvm.javavm.attach_current_thread()?;
 
     tracing_slf4j::register_log_fn(&mut env)?;
@@ -91,20 +103,23 @@ fn generate_pdf_inner(jvm: DependentJavaVM, name: &str, events: &[EventSummary])
     // Document header
 
     let cell = Cell::new(&mut env)?;
-    cell.add_paragraph(Paragraph::new_with_text("Urenregistratie", &mut env)?, &mut env)?;
+    cell.add(
+        &Paragraph::new_with_text("Urenregistratie", &mut env)?,
+        &mut env,
+    )?;
     cell.set_bold(&mut env)?;
     cell.set_border(Border::NoBorder, &mut env)?;
     cell.set_text_alignment(TextAlignment::Left, &mut env)?;
 
     header_table.start_new_row(&mut env)?;
-    header_table.add_cell(cell, &mut env)?;
-    header_table.add_cell(get_empty_cell(Border::NoBorder, 24.0, &mut env)?, &mut env)?;
+    header_table.add_cell(&cell, &mut env)?;
+    header_table.add_cell(&get_empty_cell(Border::NoBorder, 24.0, &mut env)?, &mut env)?;
 
     header_table.start_new_row(&mut env)?;
-    header_table.add_cell(get_cell("Bedrijf:", Border::NoBorder, &mut env)?, &mut env)?;
-    header_table.add_cell(get_cell(name, Border::NoBorder, &mut env)?, &mut env)?;
+    header_table.add_cell(&get_cell("Bedrijf:", Border::NoBorder, &mut env)?, &mut env)?;
+    header_table.add_cell(&get_cell(name, Border::NoBorder, &mut env)?, &mut env)?;
 
-    doc.add_table(header_table, &mut env)?;
+    doc.add(&header_table, &mut env)?;
 
     // Document content
 
@@ -115,41 +130,57 @@ fn generate_pdf_inner(jvm: DependentJavaVM, name: &str, events: &[EventSummary])
     // Headers
     hour_table.start_new_row(&mut env)?;
     let cell = Cell::new(&mut env)?;
-    cell.add_paragraph(Paragraph::new_with_text("Datum", &mut env)?, &mut env)?;
+    cell.add(&Paragraph::new_with_text("Datum", &mut env)?, &mut env)?;
     cell.set_bold(&mut env)?;
     cell.set_border(Border::NoBorder, &mut env)?;
-    hour_table.add_cell(cell, &mut env)?;
+    hour_table.add_cell(&cell, &mut env)?;
 
     let cell = Cell::new(&mut env)?;
-    cell.add_paragraph(Paragraph::new_with_text("Tijd", &mut env)?, &mut env)?;
+    cell.add(&Paragraph::new_with_text("Tijd", &mut env)?, &mut env)?;
     cell.set_bold(&mut env)?;
     cell.set_border(Border::NoBorder, &mut env)?;
-    hour_table.add_cell(cell, &mut env)?;
+    hour_table.add_cell(&cell, &mut env)?;
 
     let cell = Cell::new(&mut env)?;
-    cell.add_paragraph(Paragraph::new_with_text("Duratie", &mut env)?, &mut env)?;
+    cell.add(&Paragraph::new_with_text("Duratie", &mut env)?, &mut env)?;
     cell.set_bold(&mut env)?;
     cell.set_border(Border::NoBorder, &mut env)?;
-    hour_table.add_cell(cell, &mut env)?;
+    hour_table.add_cell(&cell, &mut env)?;
 
     for event in events {
         hour_table.start_new_row(&mut env)?;
-        hour_table.add_cell(get_cell(&event.date, Border::NoBorder, &mut env)?, &mut env)?;
-        hour_table.add_cell(get_cell(&event.time, Border::NoBorder, &mut env)?, &mut env)?;
-        hour_table.add_cell(get_cell(&event.duration, Border::NoBorder, &mut env)?, &mut env)?;
+        hour_table.add_cell(
+            &get_cell(&event.date, Border::NoBorder, &mut env)?,
+            &mut env,
+        )?;
+        hour_table.add_cell(
+            &get_cell(&event.time, Border::NoBorder, &mut env)?,
+            &mut env,
+        )?;
+        hour_table.add_cell(
+            &get_cell(&event.duration, Border::NoBorder, &mut env)?,
+            &mut env,
+        )?;
     }
 
     // Empty row
     hour_table.start_new_row(&mut env)?;
-    hour_table.add_cell(get_empty_cell(Border::NoBorder, 24.0, &mut env)?, &mut env)?;
+    hour_table.add_cell(&get_empty_cell(Border::NoBorder, 24.0, &mut env)?, &mut env)?;
 
     // Totals
     hour_table.start_new_row(&mut env)?;
-    hour_table.add_cell(get_empty_cell(Border::NoBorder, 24.0, &mut env)?, &mut env)?;
-    hour_table.add_cell(get_cell("Totaal", Border::NoBorder, &mut env)?, &mut env)?;
-    hour_table.add_cell(get_cell(&fmt_duration(calc_total_duration(events)), Border::NoBorder, &mut env)?, &mut env)?;
+    hour_table.add_cell(&get_empty_cell(Border::NoBorder, 24.0, &mut env)?, &mut env)?;
+    hour_table.add_cell(&get_cell("Totaal", Border::NoBorder, &mut env)?, &mut env)?;
+    hour_table.add_cell(
+        &get_cell(
+            &fmt_duration(calc_total_duration(events)),
+            Border::NoBorder,
+            &mut env,
+        )?,
+        &mut env,
+    )?;
 
-    doc.add_table(hour_table, &mut env)?;
+    doc.add(&hour_table, &mut env)?;
 
     // Export document
 
@@ -165,7 +196,7 @@ fn get_empty_cell<'a>(border: Border, height: f32, env: &mut JNIEnv<'a>) -> Resu
 
     let paragraph = Paragraph::new(env)?;
     paragraph.set_height(height, env)?;
-    cell.add_paragraph(paragraph, env)?;
+    cell.add(&paragraph, env)?;
 
     Ok(cell)
 }
@@ -173,7 +204,7 @@ fn get_empty_cell<'a>(border: Border, height: f32, env: &mut JNIEnv<'a>) -> Resu
 fn get_cell<'a>(text: &str, border: Border, env: &mut JNIEnv<'a>) -> Result<Cell<'a>> {
     let cell = Cell::new(env)?;
     let paragraph = Paragraph::new_with_text(text, env)?;
-    cell.add_paragraph(paragraph, env)?;
+    cell.add(&paragraph, env)?;
     cell.set_border(border, env)?;
 
     Ok(cell)

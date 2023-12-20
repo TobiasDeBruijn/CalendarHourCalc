@@ -1,10 +1,10 @@
-use std::path::PathBuf;
 use cfg_if::cfg_if;
-use serde::{Deserialize, Serialize};
 use color_eyre::Result;
+use serde::{Deserialize, Serialize};
+use std::env::var;
+use std::path::PathBuf;
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use std::env::var;
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct ICalConfig {

@@ -18,7 +18,7 @@ cfg-if = "1.0.0"
 clap = { version = "4.0.32", features = ["derive"]}
 tokio = { version = "1.27.0", features = ["full"]}
 reqwest = { version = "0.11.16", default-features = false, features = ["rustls-tls"]}
-itext = { git = "https://github.com/MrFriendly-B-V/itext-rs.git", features = ["bundled"] }
-tracing-slf4j = { git = "https://github.com/MrFriendly-B-V/tracing-slf4j.git" }
+itext = { version = "0.2.0", features = ["bundled"] }
+tracing-slf4j = "0.1.0"
 jni = { version = "0.21.1", features = ["invocation"] }
 tempfile = "3.5.0"

@@ -10,7 +10,7 @@ pub struct Args {
 pub enum Commands {
     Configure {
         #[command(subcommand)]
-        configure_commands: ConfigureCommands
+        configure_commands: ConfigureCommands,
     },
     Report {
         /// The index of the ICS file. Use `hour-calc configure ics list` to see available options
@@ -24,8 +24,8 @@ pub enum Commands {
         year: Option<i32>,
 
         #[clap(long, short, value_enum)]
-        output_format: OutFormat
-    }
+        output_format: OutFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -40,13 +40,8 @@ pub enum ConfigureCommands {
 #[derive(Debug, Subcommand)]
 pub enum IcsCommands {
     List,
-    Add {
-        name: String,
-        link: String,
-    },
-    Remove {
-        index: usize,
-    },
+    Add { name: String, link: String },
+    Remove { index: usize },
 }
 
 #[derive(Debug, Clone, Default, ValueEnum)]

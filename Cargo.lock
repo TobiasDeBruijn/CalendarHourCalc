@@ -195,6 +195,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "convert_case"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -600,11 +609,14 @@ dependencies = [
 
 [[package]]
 name = "itext"
-version = "0.1.0"
-source = "git+https://github.com/MrFriendly-B-V/itext-rs.git#578facc2b077c8a4660b40414f2a25165268d7ec"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2344149e759491197c3f1980067f3fb873936caea9006451465f829cb6b8283"
 dependencies = [
  "color-eyre",
+ "convert_case",
  "jni",
+ "strum_macros",
 ]
 
 [[package]]
@@ -1029,6 +1041,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustversion"
+version = "1.0.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ffc183a10b4478d04cbbbfc96d0873219d962dd5accaff2ffbd4ceb7df837f4"
+
+[[package]]
 name = "ryu"
 version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1162,6 +1180,19 @@ name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
+
+[[package]]
+name = "strum_macros"
+version = "0.24.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e385be0d24f186b4ce2f9982191e7101bb737312ad61c1f2f984f34bcf85d59"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 1.0.107",
+]
 
 [[package]]
 name = "syn"
@@ -1393,7 +1424,8 @@ dependencies = [
 [[package]]
 name = "tracing-slf4j"
 version = "0.1.0"
-source = "git+https://github.com/MrFriendly-B-V/tracing-slf4j.git#e18f68943bca1b8d87e1910b26b001206ea97cbb"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4fb2d64da444566fd6de7b090ce561e5472e667d22847d14340a180b9a349b8"
 dependencies = [
  "color-eyre",
  "jni",
@@ -1437,6 +1469,12 @@ checksum = "5c5713f0fc4b5db668a2ac63cdb7bb4469d8c9fed047b1d0292cc7b0ce2ba921"
 dependencies = [
  "tinyvec",
 ]
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1dd624098567895118886609431a7c3b8f516e41d30e0643f03d94592a147e36"
 
 [[package]]
 name = "unicode-width"

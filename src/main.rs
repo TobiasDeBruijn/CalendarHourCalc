@@ -1,13 +1,13 @@
 use crate::args::{Args, Commands, ConfigureCommands, IcsCommands, OutFormat};
+use crate::config::{Config, ICalConfig};
 use chrono::{DateTime, Datelike, Timelike};
 use clap::Parser;
 use color_eyre::eyre::{Error, Result};
 use ical::IcalParser;
-use std::io::{BufReader, Cursor};
 use reqwest::Client;
+use std::io::{BufReader, Cursor};
 use tabled::{Panel, Style, Table, Tabled};
 use tracing::warn;
-use crate::config::{Config, ICalConfig};
 
 mod args;
 mod config;
@@ -46,10 +46,15 @@ async fn main() -> Result<()> {
                     IcsCommands::Add { name, link } => ics_add(&mut config, name, link).await?,
                     IcsCommands::Remove { index } => ics_remove(&mut config, index).await?,
                 }
-            },
+            }
             ConfigureCommands::Clear => config_clear().await?,
         },
-        Commands::Report { ics_index, month, year, output_format } => {
+        Commands::Report {
+            ics_index,
+            month,
+            year,
+            output_format,
+        } => {
             let mut config = Config::open().await?.unwrap_or_default();
             report(&mut config, ics_index, month, year, output_format).await?
         }
@@ -73,7 +78,9 @@ async fn ics_list(config: &mut Config) -> Result<()> {
         url: &'a str,
     }
 
-    let ics = config.ical.iter()
+    let ics = config
+        .ical
+        .iter()
         .enumerate()
         .map(|(index, ical_config)| IcsList {
             index,
@@ -82,9 +89,7 @@ async fn ics_list(config: &mut Config) -> Result<()> {
         })
         .collect::<Vec<_>>();
 
-    let table = Table::new(ics.iter())
-        .with(Style::rounded())
-        .to_string();
+    let table = Table::new(ics.iter()).with(Style::rounded()).to_string();
     println!("{table}");
     Ok(())
 }
@@ -94,10 +99,7 @@ async fn ics_add(config: &mut Config, name: String, link: String) -> Result<()> 
         return Err(Error::msg("Already exists"));
     }
 
-    config.ical.push(ICalConfig {
-        url: link,
-        name,
-    });
+    config.ical.push(ICalConfig { url: link, name });
 
     config.store().await
 }
@@ -111,8 +113,16 @@ async fn ics_remove(config: &mut Config, index: usize) -> Result<()> {
     config.store().await
 }
 
-async fn report(config: &mut Config, ics_index: usize, month: Option<u32>, year: Option<i32>, out_format: OutFormat) -> Result<()> {
-    let ics_config = config.ical.get(ics_index)
+async fn report(
+    config: &mut Config,
+    ics_index: usize,
+    month: Option<u32>,
+    year: Option<i32>,
+    out_format: OutFormat,
+) -> Result<()> {
+    let ics_config = config
+        .ical
+        .get(ics_index)
         .ok_or(Error::msg("Invalid index"))?;
     let parser = download_ical(&ics_config.url).await?;
 
@@ -203,7 +213,11 @@ async fn report(config: &mut Config, ics_index: usize, month: Option<u32>, year:
 
     let mut events = events
         .into_iter()
-        .filter(|event| month.map(|month| event.month_start == month).unwrap_or(true))
+        .filter(|event| {
+            month
+                .map(|month| event.month_start == month)
+                .unwrap_or(true)
+        })
         .filter(|event| year.map(|year| event.year_start == year).unwrap_or(true))
         .collect::<Vec<_>>();
 
@@ -219,11 +233,7 @@ async fn report(config: &mut Config, ics_index: usize, month: Option<u32>, year:
 }
 
 pub fn calc_total_duration(events: &[EventSummary]) -> i64 {
-    events
-        .iter()
-        .map(|x| x.duration_sec)
-        .sum()
-
+    events.iter().map(|x| x.duration_sec).sum()
 }
 
 fn report_print_table(events: &[EventSummary]) {
