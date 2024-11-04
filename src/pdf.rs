@@ -1,14 +1,11 @@
 use crate::{calc_total_duration, fmt_duration, EventSummary};
 use color_eyre::Result;
-use itext::itext::kernel::{PdfDocument, PdfWriter};
-use itext::itext::layout::{
-    BlockElement, Border, Cell, Document, ElementPropertyContainer, HorizontalAlignment, Paragraph,
-    Table, TextAlignment,
-};
-use itext::java::ByteArrayOutputStream;
 use jni::{InitArgsBuilder, JNIEnv, JNIVersion, JavaVM};
 use std::env;
 use std::path::Path;
+use itext::itext::kernel::{PdfDocument, PdfWriter};
+use itext::itext::layout::{BlockElement, Border, Cell, Document, ElementPropertyContainer, HorizontalAlignment, Paragraph, RootElement, Table, TextAlignment};
+use itext::java::ByteArrayOutputStream;
 use tempfile::TempDir;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
