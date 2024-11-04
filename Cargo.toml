@@ -22,3 +22,6 @@ itext = { version = "0.2.0", features = ["bundled"] }
 tracing-slf4j = "0.1.0"
 jni = { version = "0.21.1", features = ["invocation"] }
 tempfile = "3.5.0"
+
+[patch.crates-io]
+tracing-slf4j = { git = "https://github.com/MrFriendly-B-V/tracing-slf4j" }

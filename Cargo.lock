@@ -1424,9 +1424,9 @@ dependencies = [
 [[package]]
 name = "tracing-slf4j"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4fb2d64da444566fd6de7b090ce561e5472e667d22847d14340a180b9a349b8"
+source = "git+https://github.com/MrFriendly-B-V/tracing-slf4j#80143bb3c5025213a5bd2258f0f802b93f9875dd"
 dependencies = [
+ "cfg-if",
  "color-eyre",
  "jni",
  "tracing",
